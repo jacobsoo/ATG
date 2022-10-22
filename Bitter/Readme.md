@@ -828,7 +828,9 @@ Sha256 : `cbfa2aa73ea8bdc126c6767efd61a822786f4b48479859a6d14246a25d8ebd1a`
 With regards to this sample, it seems like `Bitter` decided to obfuscate their C2.
 
 However you can use the following Java file to get back the C2.
+
 C2 : `hxxps://currweather[.]com`
+
 ```java
 public class main
 {
